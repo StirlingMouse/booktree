@@ -69,6 +69,7 @@ class Config(object):
     def __init__(self, params):
         try:
             with open(params.config_file) as cf_file:
+                self.config_file = params.config_file
                 cfg = json.loads (cf_file.read())
 
                 #override config/flags with command line param
@@ -112,7 +113,10 @@ class Config(object):
 
         try:
             for path_item in path_items:
-                sub_dict = sub_dict.get(path_item)
+                try:
+                    sub_dict = sub_dict[int(path_item)]
+                except:
+                    sub_dict = sub_dict.get(path_item)
 
             value = sub_dict.get(data_item, default)
 

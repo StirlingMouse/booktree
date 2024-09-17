@@ -311,6 +311,11 @@ def buildTreeFromHybridSources(path, mediaPath, files, logfile, cfg):
 
 
 def main(cfg):
+    #build __cache__ folders if they don't exist
+    os.makedirs(os.path.join(os.getcwd(), "__cache__", "book"), exist_ok=True)
+    os.makedirs(os.path.join(os.getcwd(), "__cache__", "mam"), exist_ok=True)
+    os.makedirs(os.path.join(os.getcwd(), "__cache__", "audible"), exist_ok=True)
+
     #make sure log_path exists
     log_path=cfg.get("Config/log_path")
     if (len(log_path)==0):
@@ -342,11 +347,6 @@ if __name__ == "__main__":
     if not sys.version_info > (3, 10):
         print ("booktree requires python 3.10 or higher. Please upgrade your version")
     else:
-        #build __cache__ folders if they don't exist
-        os.makedirs(os.path.join(os.getcwd(), "__cache__", "book"), exist_ok=True)
-        os.makedirs(os.path.join(os.getcwd(), "__cache__", "mam"), exist_ok=True)
-        os.makedirs(os.path.join(os.getcwd(), "__cache__", "audible"), exist_ok=True)
-
         #process commandline arguments
         myx_args.params = myx_args.importArgs()
 
