@@ -211,6 +211,29 @@ def logBooks(logFilePath, books, cfg):
             except csv.Error as e:
                 print(f"file {logFilePath}: {e}")
 
+def logMyLibrary (logFilePath, books, cfg):
+    if len(books):
+        write_headers = not os.path.exists(logFilePath)
+        with open(logFilePath, mode="a", newline="", errors='ignore') as csv_file:
+            try:
+                fields=getLogHeaders()
+                #pprint (fields)
+                for book in books:
+                    for file in book.files:
+                        row=book.getLogRecord(file,cfg)
+                        row["mamCount"] = len (book.mamIDs)
+                        row["mam-asin"] = book.mamIDs
+                        #pprint(row)
+                        #create a writer
+                        writer = csv.DictWriter(csv_file, fieldnames=fields)
+                        if write_headers:
+                            writer.writeheader()
+                            write_headers=False
+                        writer.writerow(row)
+
+            except csv.Error as e:
+                print(f"file {logFilePath}: {e}")
+
 def isCollection (bookFile, source_path):
     #we assume that most books are formatted this way /Book/Files.m4b
     #we assume that this is a collection, if the file is 3 levels deep, /Book/Another Book or CD/Files.m4b
@@ -248,7 +271,7 @@ def readLog(logFilePath, books):
                 print(f"file {logFilePath}: {e}")
 
 def getLogHeaders():
-    headers=['book', 'file', 'paths', 'isMatched', 'isHardLinked', 'mamCount', 'audibleMatchCount', 'metadatasource', 'id3-matchRate', 'id3-asin', 'id3-title', 'id3-subtitle', 'id3-publicationName', 'id3-length', 'id3-duration', 'id3-series', 'id3-authors', 'id3-narrators', 'id3-seriesparts', 'id3-language', 'mam-matchRate', 'mam-asin', 'mam-title', 'mam-subtitle', 'mam-publicationName', 'mam-length', 'mam-duration', 'mam-series', 'mam-authors', 'mam-narrators', 'mam-seriesparts', 'mam-language', 'adb-matchRate', 'adb-asin', 'adb-title', 'adb-subtitle', 'adb-publicationName', 'adb-length', 'adb-duration', 'adb-series', 'adb-authors', 'adb-narrators', 'adb-seriesparts', 'adb-language', 'sourcePath', 'mediaPath']
+    headers=['book', 'file', 'paths', 'isMatched', 'isHardLinked', 'mamCount', 'audibleMatchCount', 'metadatasource', 'id3-matchRate', 'id3-asin', 'id3-title', 'id3-subtitle', 'id3-publisher', 'id3-length', 'id3-duration', 'id3-series', 'id3-authors', 'id3-narrators', 'id3-seriesparts', 'id3-language', 'mam-matchRate', 'mam-asin', 'mam-title', 'mam-subtitle', 'mam-publisher', 'mam-length', 'mam-duration', 'mam-series', 'mam-authors', 'mam-narrators', 'mam-seriesparts', 'mam-language', 'adb-matchRate', 'adb-asin', 'adb-title', 'adb-subtitle', 'adb-publisher', 'adb-length', 'adb-duration', 'adb-series', 'adb-authors', 'adb-narrators', 'adb-seriesparts', 'adb-language', 'sourcePath', 'mediaPath']
                     
     return dict.fromkeys(headers)
 
@@ -274,6 +297,12 @@ def createOPF(book, path):
         # - Description -
         template = re.sub(r"__DESCRIPTION__", book.description, template)
 
+        # - Publisher -
+        template = re.sub(r"__PUBLISHER__", book.publisher, template)
+
+        # - Year -
+        template = re.sub(r"__YEAR__", book.publishYear[0:4], template)
+
         # - Narrator -
         narrators=""
         for narrator in book.narrators:
@@ -293,12 +322,17 @@ def createOPF(book, path):
         # - Language -
         template = re.sub(r"__LANGUAGE__", book.language, template)
         
-        # if len(book.series) and len(book.series[0].name):
-        #     template = re.sub(r"__SERIES__", book.series[0].name, template)
-        #     template = re.sub(r"__SERIESPART__", book.series[0].part, template)
-        # else:
-        #     template = re.sub(r"__SERIES__", "", template)
-        #     template = re.sub(r"__SERIESPART__", "", template)
+        # - Genres -
+        genres=""
+        for g in set(book.genres):
+            genres += f"\t<dc:subject><![CDATA[{g}]]></dc:subject>\n"
+        template = re.sub(r"__GENRES__", genres, template)
+
+        # - Tags -
+        tags=""
+        for t in set(book.tags):
+            tags += f"\t<dc:tag><![CDATA[{t}]]></dc:tag>\n"
+        template = re.sub(r"__TAGS__", tags, template)
 
         opfFile=os.path.join(path, "metadata.opf")
         with open(opfFile, mode='w', encoding='utf-8') as file:
@@ -319,7 +353,7 @@ def isCached(key, category, cfg):
         print (f"Checking cache: {category}/{key}...")
     
     #Check if this book's hashkey exists in the cache, if so - it's been processed
-    bookFile = os.path.join(os.getcwd(), "__cache__", category, key)
+    bookFile = os.path.join(getCachePath(cfg), "__cache__", category, key)
     found = os.path.exists(bookFile)  
     return found      
     
@@ -328,7 +362,7 @@ def cacheMe(key, category, content, cfg):
     verbose = bool(cfg.get("Config/flags/verbose"))
 
     #create the cache file
-    bookFile = os.path.join(os.getcwd(), "__cache__", category, key)
+    bookFile = os.path.join(getCachePath(cfg), "__cache__", category, key)
     with open(bookFile, mode="w", encoding='utf-8', errors='ignore') as file:
         file.write(json.dumps(content))
 
@@ -336,9 +370,9 @@ def cacheMe(key, category, content, cfg):
         print(f"Caching {key} in File: {bookFile}")
     return os.path.exists(bookFile)        
 
-def loadFromCache(key, category):
+def loadFromCache(key, category, cfg):
     #return the content from the cache file
-    bookFile = os.path.join(os.getcwd(), "__cache__", category, key)
+    bookFile = os.path.join(getCachePath(cfg), "__cache__", category, key)
     with open(bookFile, mode='r', encoding='utf-8') as file:
         f = file.read()
     
@@ -428,7 +462,7 @@ def getAltTitle(parent, book, cfg):
         altTitle = cleanseTitle(book.series[0].name)
         if len(altTitle) : skipSeries = True
 
-    print (f"Proxwaaing {altTitle}")
+    print (f"Processing {altTitle}")
     while True:
         #remove authors name in title
         for a in book.authors:
@@ -501,3 +535,38 @@ def isMultiBookCollection(filePath):
     # if the filedepth from source is 3 levels down, assume it's a multibook collection
     isMBC = (filedepth >= 3)
     return isMBC
+
+def initMetadataJSON(book, path):
+    print (f"Creating a metadata.json file in {path}")
+    
+    metadataTemplate=os.path.join(os.getcwd(), "templates/metadata.json") 
+    if os.path.exists(metadataTemplate):
+        with open(metadataTemplate) as json_file:
+            #Initialize the metadata with the template
+            book.metadata = json.loads(json_file.read())
+
+def getLogPath(cfg):
+    #make sure log_path exists
+    log_path=cfg.get("Config/log_path")
+
+    if (log_path is None) or (len(log_path)==0):
+        log_path=os.path.join(os.getcwd(),"logs")        
+
+    if not os.path.exists(os.path.abspath(log_path)):
+        os.makedirs(os.path.abspath(log_path), exist_ok=True)
+
+    return log_path
+
+def getCachePath(cfg):
+    #make sure log_path exists
+    cache_path=cfg.get("Config/cache_path")
+
+    if (cache_path is None) or (len(cache_path)==0):
+        cache_path=os.path.join(os.getcwd(),"logs")        
+
+    #build __cache__ folders if they don't exist
+    os.makedirs(os.path.join(cache_path, "__cache__", "book"), exist_ok=True)
+    os.makedirs(os.path.join(cache_path, "__cache__", "mam"), exist_ok=True)
+    os.makedirs(os.path.join(cache_path, "__cache__", "audible"), exist_ok=True)
+
+    return cache_path

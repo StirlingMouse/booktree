@@ -43,17 +43,21 @@ class Book:
     asin:str=""
     title:str=""
     subtitle:str=""
-    publicationName:str=""
+    publisher:str=""
     length:int=0
     duration:float=0
     matchRate=0
     language:str="english"
     snatched:bool=False
     description:str=""
+    publishYear:str=""
     series:list[Series]= field(default_factory=list)
     authors:list[Contributor]= field(default_factory=list)
     narrators:list[Contributor]= field(default_factory=list)
     files:list[str]= field(default_factory=list)
+    genres:list[str]= field(default_factory=list)
+    tags:list[str]= field(default_factory=list)
+    metadata={}
 
     def addFiles(self, file):
         self.files.append(file)
@@ -138,7 +142,7 @@ class Book:
         book[f"{ns}asin"]=self.asin
         book[f"{ns}title"]=self.title
         book[f"{ns}subtitle"]=self.subtitle
-        book[f"{ns}publicationName"]=self.publicationName
+        book[f"{ns}publisher"]=self.publisher
         book[f"{ns}length"]=self.length
         book[f"{ns}duration"]=self.duration
         book[f"{ns}series"]=self.getSeries()
@@ -152,7 +156,7 @@ class Book:
         self.asin=""
         self.title=""
         self.subtitle=""
-        self.publicationName=""
+        self.publisher=""
         self.duration=""
         self.series=[]
         self.authors=[]
@@ -167,6 +171,10 @@ class Book:
     def createOPF(self, path):
         #creates an OPF file for this book at the specified path
         myx_utilities.createOPF(self, path)
+
+    def initMetadataJSON(self, path):
+        print (f"Creating a metadata.json file in {path}")
+        myx_utilities.initMetadataJSON(self, path)
 
           
 #Book File Class
@@ -270,26 +278,37 @@ class BookFile:
     def getConfigTargetPath(self, cfg, book):
         #Config
         media_path = self.mediaPath
+        multi_author = cfg.get("Config/target_path/multi_author")
         in_series = cfg.get("Config/target_path/in_series")
         no_series = cfg.get("Config/target_path/no_series")
         disc_folder = cfg.get("Config/target_path/disc_folder")
-
 
         if (book is not None):
             #Get primary author
             if ((book.authors is not None) and (len(book.authors) == 0)):
                 author="Unknown"
+            elif ((book.authors is not None) and (len(book.authors) > 1) and (multi_author is not None)):
+                    match multi_author:
+                        case "first_author": 
+                            author=book.authors[0].name  
+                        
+                        case "authors":
+                            author=book.getAuthors()
+
+                        case _: 
+                            author=multi_author
             else:
-                author=book.authors[0].name  
+                author=book.authors[0].name
 
             #standardize author name (replace . with space, and then make sure that there's only single space)
-            author=myx_utilities.cleanseAuthor(author)
+            if len(author):
+                author=myx_utilities.cleanseAuthor(author)
 
             #Get primary narrator
-            if ((book.narrators is not None) and (len(book.authors) == 0)):
-                narrators=""
+            if ((book.narrators is not None) and (len(book.narrators) == 1)):
+                narrator=book.getNarrators()
             else:
-                narrators=book.getNarrators()
+                narrator=""
 
             #is this a MultiCd file?
             disc = self.getParentFolder()
@@ -312,7 +331,13 @@ class BookFile:
             tokens["title"] = sanitize_filename(book.title)
             tokens["cleanTitle"] = sanitize_filename(title)
             tokens["disc"] = sanitize_filename(disc)
-            tokens["narrators"] = f"{{{sanitize_filename(narrators)}}}"
+
+            if len(narrator):
+                tokens["narrator"] = f"{{{sanitize_filename(narrator)}}}"
+                tokens["narrators"] = f"{{{sanitize_filename(narrator)}}}"
+            else:
+                tokens["narrator"] = ""
+                tokens["narrators"] = ""
 
             sPath = ""
             if len(book.series):
@@ -367,6 +392,7 @@ class MAMBook:
     metadataBook:Book=None
     paths:str=""
     isMatched:bool=False
+    mamIDs:list[str]= field(default_factory=list)
 
     def getRunTimeLength(self):
         #add all the duration of the files in the book, and convert into minutes
@@ -555,9 +581,11 @@ class MAMBook:
             #for each file for this book                
             for f in self.files:
                 #UPDATED 8/30 to allow users to customize target_path formats  
-                if metadata == "log":
+                p = ""
+                if ((metadata == "log") and self.isMatched):
                     p = self.paths
-                else:
+                
+                if (len(p) == 0):
                     p = f.getConfigTargetPath(cfg, self.metadataBook)
 
                 print (f"{prefix}Hardlinking files for {self.metadataBook.title}")
@@ -605,6 +633,30 @@ class MAMBook:
             book=self.bestAudibleMatch.getDictionary(book, "adb-")
 
         return book    
+
+    def isMyBookInMAM (self, cfg, bookFile:BookFile):
+        #Config variables
+        verbose = bool(cfg.get("Config/flags/verbose"))
+        ebooks = bool(cfg.get("Config/flags/ebooks"))
+        fuzzy_match = cfg.get("Config/fuzzy_match")
+        add_narrators = True
+
+        #search MAM record for this book
+        title = f'"{self.bestAudibleMatch.title}"'
+        authors=self.bestAudibleMatch.getAuthors(delimiter="|", encloser='"', stripaccents=False)
+        extension = f'"{bookFile.getExtension()}"'
+    
+        # Search using book key and authors (using or search in case the metadata is bad)
+        print(f"Searching MAM for\n\tTitle: {title}\n\tauthors:{authors}")
+        books = myx_mam.searchMAM(cfg, title, authors, extension)
+
+        if (books is not None):
+            #search results found
+            for b in books:
+                #get torrent links
+                self.mamIDs.append(str(b["id"]))
+
+        return len(self.mamIDs)
 
     def getMAMBooks(self, cfg, bookFile:BookFile):
         #Config variables
@@ -690,7 +742,7 @@ class MAMBook:
     def cacheMe(self, category, content, cfg):
         return myx_utilities.cacheMe(self.getHashKey(),category, content, cfg) 
         
-    def loadFromCache(self, category):
-        return myx_utilities.loadFromCache(self.getHashKey(), category)
+    def loadFromCache(self, category, cfg):
+        return myx_utilities.loadFromCache(self.getHashKey(), category, cfg)
 
 
