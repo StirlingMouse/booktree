@@ -305,13 +305,13 @@ Log mode lets you correct matches or metadata from an earlier run.
         pass
 
     def browse_sourcedir(self):
-        directory = filedialog.askdirectory()
+        directory = filedialog.askdirectory(mustexist = True)
         if directory:
             self.sourcedir_entry.delete(0, tk.END)
             self.sourcedir_entry.insert(0, directory)
 
     def browse_mediadir(self):
-        directory = filedialog.askdirectory()
+        directory = filedialog.askdirectory(mustexist = True)
         if directory:
             self.mediadir_entry.delete(0, tk.END)
             self.mediadir_entry.insert(0, directory)
