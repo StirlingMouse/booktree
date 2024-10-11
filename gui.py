@@ -260,17 +260,18 @@ How to Obtain the Correct MAM Session Cookie:
 
 2. Navigate to Security Settings:
    - Click on your username at the top of the page.
-   - Select "Edit Profile" or "Preferences."
+   - Select "Preferences" or "Edit Profile"
    - Go to the "Security" tab.
 
 3. Create a New Session:
    - Choose to create a new session.
-   - Set the session type to **IP Locked** or **ASN Locked**.
-   - Save the session.
+   - Go to https://www.myanonamouse.net/myip.php and copy your IP address
+   - Enter your IP address into the "Create session" box
+   - Click on "Submit changes!"
 
 4. Copy the Session Cookie (`mam_id`):
-   - After creating the session, you'll receive a session identifier (`mam_id`).
-   - Copy this value and paste it into the **MAM Session Cookie** field in the application.
+   - Copy the long string that is displayed
+   - Paste it into the "MAM Session Cookie" field in the application
 """
         messagebox.showinfo("Help", help_text)
 
