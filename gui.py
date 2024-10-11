@@ -308,19 +308,19 @@ Log mode lets you correct matches or metadata from an earlier run.
         directory = filedialog.askdirectory(mustexist = True)
         if directory:
             self.sourcedir_entry.delete(0, tk.END)
-            self.sourcedir_entry.insert(0, directory)
+            self.sourcedir_entry.insert(0, os.path.normpath(directory))
 
     def browse_mediadir(self):
         directory = filedialog.askdirectory(mustexist = True)
         if directory:
             self.mediadir_entry.delete(0, tk.END)
-            self.mediadir_entry.insert(0, directory)
+            self.mediadir_entry.insert(0, os.path.normpath(directory))
 
     def browse_logfile(self):
         logfile = filedialog.askopenfilename(filetypes=[("log file", "*.csv")])
         if logfile:
             self.logfile_entry.delete(0, tk.END)
-            self.logfile_entry.insert(0, directory)
+            self.logfile_entry.insert(0, os.path.normpath(directory))
 
     def save_config(self):
         self.config._data["Config"]["metadata"] = to_metadata(
